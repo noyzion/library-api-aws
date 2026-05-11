@@ -1,0 +1,27 @@
+# Python virtual environment
+.venv/
+venv/
+cdk/.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# CDK output
+cdk.out/
+cdk/cdk.out/
+
+# Environment variables and secrets
+.env
+*.env
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
