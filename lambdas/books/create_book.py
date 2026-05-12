@@ -1,14 +1,19 @@
 import json
 import os
-import uuid
 from datetime import datetime, timezone
 
 import boto3
 from boto3.dynamodb.conditions import Attr
 
+
 dynamodb = boto3.resource("dynamodb")
-table_name = os.environ["BOOKS_TABLE_NAME"]
-books_table = dynamodb.Table(table_name)
+
+books_table_name = os.environ["BOOKS_TABLE_NAME"]
+books_table = dynamodb.Table(books_table_name)
+
+counters_table_name = os.environ["COUNTERS_TABLE_NAME"]
+counters_table = dynamodb.Table(counters_table_name)
+
 
 ALLOWED_GENRES = {
     "fiction",
@@ -18,12 +23,6 @@ ALLOWED_GENRES = {
     "other",
 }
 
-def isbn_exists(isbn):
-    result = books_table.scan(
-        FilterExpression=Attr("isbn").eq(isbn)
-    )
-
-    return len(result.get("Items", [])) > 0
 
 def response(status_code, body):
     return {
@@ -33,6 +32,7 @@ def response(status_code, body):
         },
         "body": json.dumps(body)
     }
+
 
 def validate_book(data):
     if "title" not in data or not data["title"]:
@@ -75,8 +75,34 @@ def validate_book(data):
     if not isinstance(data["total_copies"], int):
         return "total_copies must be a number"
 
+    if data["total_copies"] <= 0:
+        return "total_copies must be greater than 0"
+
     return None
-    
+
+
+def isbn_exists(isbn):
+    result = books_table.scan(
+        FilterExpression=Attr("isbn").eq(isbn)
+    )
+
+    return len(result.get("Items", [])) > 0
+
+
+def get_next_book_id():
+    result = counters_table.update_item(
+        Key={
+            "counter_name": "books"
+        },
+        UpdateExpression="ADD current_value :increment",
+        ExpressionAttributeValues={
+            ":increment": 1
+        },
+        ReturnValues="UPDATED_NEW"
+    )
+
+    return int(result["Attributes"]["current_value"])
+
 
 def handler(event, context):
     try:
@@ -85,7 +111,7 @@ def handler(event, context):
                 "success": False,
                 "message": "Request body is required"
             })
-        
+
         try:
             data = json.loads(event["body"])
         except json.JSONDecodeError:
@@ -93,7 +119,7 @@ def handler(event, context):
                 "success": False,
                 "message": "Invalid JSON body"
             })
-        
+
         validation_error = validate_book(data)
 
         if validation_error:
@@ -101,7 +127,7 @@ def handler(event, context):
                 "success": False,
                 "message": validation_error
             })
-        
+
         isbn = str(data["isbn"])
 
         if isbn_exists(isbn):
@@ -111,13 +137,13 @@ def handler(event, context):
             })
 
         now = datetime.now(timezone.utc).isoformat()
-        book_id = str(uuid.uuid4())
+        book_id = get_next_book_id()
 
         book = {
             "id": book_id,
             "title": data["title"],
             "author": data["author"],
-            "isbn": str(data["isbn"]),
+            "isbn": isbn,
             "published_year": data["published_year"],
             "genre": data["genre"],
             "total_copies": data["total_copies"],
@@ -126,7 +152,7 @@ def handler(event, context):
             "updated_at": now
         }
 
-        books_table.put_item(Item = book)
+        books_table.put_item(Item=book)
 
         return response(201, {
             "success": True,
@@ -143,6 +169,3 @@ def handler(event, context):
             "success": False,
             "message": "Internal server error"
         })
-
-    
-    
