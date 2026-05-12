@@ -21,7 +21,7 @@ class CdkStack(Stack):
                 type=dynamodb.AttributeType.STRING
             ),
             table_name="Books",
-            removal_policy=RemovalPolicy.DESTROY.DESTROY
+            removal_policy=RemovalPolicy.DESTROY
         )
 
         get_books_lambda = _lambda.Function(
@@ -51,4 +51,25 @@ class CdkStack(Stack):
             "GET",
             apigateway.LambdaIntegration(get_books_lambda)
         )
+
+        create_book_lambda = _lambda.Function(
+            self,
+            "CreateBookFunction",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            handler="create_book.handler",
+            code=_lambda.Code.from_asset(
+                os.path.join("..", "lambdas", "books")
+            ),
+            environment={
+                "BOOKS_TABLE_NAME": books_table.table_name
+            }
+        )
+
+        books_table.grant_read_write_data(create_book_lambda)
+
+        books_resource.add_method(
+            "POST",
+            apigateway.LambdaIntegration(create_book_lambda)
+        )
+
 
