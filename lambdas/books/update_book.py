@@ -2,10 +2,16 @@ import json
 import os
 import boto3
 from datetime import datetime
+from decimal import Decimal
 
 dynamodb = boto3.resource("dynamodb")
-table = dynamodb.Table(os.environ["BOOKS_TABLE"])
+table = dynamodb.Table(os.environ["BOOKS_TABLE_NAME"])
 
+def decimal_to_json(obj):
+    if isinstance(obj, Decimal):
+        return int(obj)
+
+    raise TypeError
 
 def build_response(status_code, body):
     return {
@@ -13,7 +19,7 @@ def build_response(status_code, body):
         "headers": {
             "Content-Type": "application/json"
         },
-        "body": json.dumps(body)
+        "body": json.dumps(body, default=decimal_to_json)
     }
 
 def validate_update_data(data):
@@ -82,9 +88,9 @@ def validate_update_data(data):
     return None
 
 
-def lambda(event, context):
+def handler(event, context):
     try:
-        book_id = event["pathParameters"]["id"]
+        book_id = int(event["pathParameters"]["id"])
 
         data = json.loads(event["body"])
 
